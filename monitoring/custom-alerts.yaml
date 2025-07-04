@@ -1,0 +1,76 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: coffeeshop-alerts
+  namespace: coffeeshop
+  labels:
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: coffeeshop.rules
+    interval: 30s
+    rules:
+    # Alert when HPA reaches maximum replicas
+    - alert: HPAReachedMaxReplicas
+      expr: |
+        kube_horizontalpodautoscaler_status_current_replicas{namespace="coffeeshop"} 
+        == 
+        kube_horizontalpodautoscaler_spec_max_replicas{namespace="coffeeshop"}
+      for: 5m
+      labels:
+        severity: warning
+        component: autoscaling
+      annotations:
+        summary: "HPA {{ $labels.horizontalpodautoscaler }} reached maximum replicas"
+        description: "HPA {{ $labels.horizontalpodautoscaler }} in namespace {{ $labels.namespace }} has reached its maximum replica count of {{ $value }}"
+
+    # Alert on high memory usage
+    - alert: HighMemoryUsage
+      expr: |
+        (sum(container_memory_working_set_bytes{namespace="coffeeshop"}) by (pod) 
+        / sum(container_spec_memory_limit_bytes{namespace="coffeeshop"}) by (pod)) > 0.9
+      for: 5m
+      labels:
+        severity: critical
+        component: memory
+      annotations:
+        summary: "High memory usage detected"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is using more than 90% of its memory limit"
+
+    # Alert on high CPU usage
+    - alert: HighCPUUsage
+      expr: |
+        (sum(rate(container_cpu_usage_seconds_total{namespace="coffeeshop"}[5m])) by (pod) 
+        / sum(container_spec_cpu_quota{namespace="coffeeshop"}) by (pod)) > 0.9
+      for: 5m
+      labels:
+        severity: critical
+        component: cpu
+      annotations:
+        summary: "High CPU usage detected"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is using more than 90% of its CPU limit"
+
+    # Alert on 5xx errors
+    - alert: High5xxErrors
+      expr: |
+        sum(rate(nginx_ingress_controller_requests{namespace="coffeeshop",status=~"5.."}[5m])) by (service) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        component: application
+      annotations:
+        summary: "High rate of 5xx errors"
+        description: "Service {{ $labels.service }} is experiencing high rate of 5xx errors ({{ $value }} errors per second)"
+
+    # Alert on ELB request count anomaly
+    - alert: ELBRequestCountAnomaly
+      expr: |
+        abs(sum(rate(aws_alb_request_count_sum[5m])) - sum(rate(aws_alb_request_count_sum[5m] offset 1h))) 
+        > (2 * stddev_over_time(sum(rate(aws_alb_request_count_sum[5m]))[1h:5m]))
+      for: 10m
+      labels:
+        severity: warning
+        component: load_balancer
+      annotations:
+        summary: "Anomaly detected in ELB request count"
+        description: "ELB request count shows significant deviation from normal patterns" 

@@ -1,0 +1,49 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+tfplan
+*.tfvars
+!example.tfvars
+
+# AWS
+*.pem
+*.ppk
+
+# Environment
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Secrets
+secrets/
+credentials/
+
+# Output files
+outputs.json 

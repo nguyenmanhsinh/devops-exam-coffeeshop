@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: coffeeshop
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5000
+      targetPort: 5000
+      protocol: TCP
+  selector:
+    app: proxy
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: coffeeshop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: proxy
+  template:
+    metadata:
+      labels:
+        app: proxy
+    spec:
+      containers:
+      - name: proxy
+        image: cuongopswat/go-coffeeshop-proxy:latest
+        imagePullPolicy: Always
+        env:
+        - name: APP_NAME
+          value: "Proxy Service"
+        - name: GRPC_PRODUCT_HOST
+          value: "product"
+        - name: GRPC_PRODUCT_PORT
+          value: "5001"
+        - name: GRPC_COUNTER_HOST
+          value: "counter"
+        - name: GRPC_COUNTER_PORT
+          value: "5002"
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5 

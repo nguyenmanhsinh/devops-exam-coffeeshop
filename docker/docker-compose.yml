@@ -1,0 +1,155 @@
+version: '3.8'
+
+services:
+  # Database - PostgreSQL (Start first)
+  postgres:
+    image: postgres:14-alpine
+    container_name: coffeeshop-postgres
+    environment:
+      POSTGRES_DB: coffeeshop
+      POSTGRES_USER: coffeeshop_user
+      POSTGRES_PASSWORD: coffeeshop_pass123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coffeeshop_user -d coffeeshop"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+  # Message Queue - RabbitMQ (Start second)
+  rabbitmq:
+    image: rabbitmq:3.11-management-alpine
+    container_name: coffeeshop-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: coffeeshop_user
+      RABBITMQ_DEFAULT_PASS: coffeeshop_pass123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+  # Product Service (Start third)
+  product:
+    image: shinshushi/go-coffeeshop-product
+    container_name: coffeeshop-product
+    environment:
+      APP_NAME: "Coffee Shop Product Service"
+    ports:
+      - "5001:5001"
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+  # Counter Service (Start fourth)
+  counter:
+    image: shinshushi/go-coffeeshop-counter
+    container_name: coffeeshop-counter
+    environment:
+      APP_NAME: "Coffee Shop Counter Service"
+      IN_DOCKER: "true"
+      PG_URL: "postgres://coffeeshop_user:coffeeshop_pass123@postgres:5432/coffeeshop"
+      PG_DSN_URL: "host=postgres user=coffeeshop_user password=coffeeshop_pass123 dbname=coffeeshop sslmode=disable"
+      RABBITMQ_URL: "amqp://coffeeshop_user:coffeeshop_pass123@rabbitmq:5672/"
+      PRODUCT_CLIENT_URL: "product:5001"
+    ports:
+      - "5002:5002"
+    depends_on:
+      - postgres
+      - rabbitmq  
+      - product
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+  # Barista Service
+  barista:
+    image: shinshushi/go-coffeeshop-barista
+    container_name: coffeeshop-barista
+    environment:
+      APP_NAME: "Coffee Shop Barista Service"
+      IN_DOCKER: "true"
+      PG_URL: "postgres://coffeeshop_user:coffeeshop_pass123@postgres:5432/coffeeshop"
+      PG_DSN_URL: "host=postgres user=coffeeshop_user password=coffeeshop_pass123 dbname=coffeeshop sslmode=disable"
+      RABBITMQ_URL: "amqp://coffeeshop_user:coffeeshop_pass123@rabbitmq:5672/"
+    depends_on:
+      - postgres
+      - rabbitmq
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+  # Kitchen Service
+  kitchen:
+    image: shinshushi/go-coffeeshop-kitchen
+    container_name: coffeeshop-kitchen
+    environment:
+      APP_NAME: "Coffee Shop Kitchen Service"
+      IN_DOCKER: "true"
+      PG_URL: "postgres://coffeeshop_user:coffeeshop_pass123@postgres:5432/coffeeshop"
+      PG_DSN_URL: "host=postgres user=coffeeshop_user password=coffeeshop_pass123 dbname=coffeeshop sslmode=disable"
+      RABBITMQ_URL: "amqp://coffeeshop_user:coffeeshop_pass123@rabbitmq:5672/"
+    depends_on:
+      - postgres
+      - rabbitmq
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+  # Proxy Service
+  proxy:
+    image: shinshushi/go-coffeeshop-proxy
+    container_name: coffeeshop-proxy
+    environment:
+      APP_NAME: "Coffee Shop Proxy Service"
+      GRPC_PRODUCT_HOST: "product"
+      GRPC_PRODUCT_PORT: "5001"
+      GRPC_COUNTER_HOST: "counter"
+      GRPC_COUNTER_PORT: "5002"
+    ports:
+      - "5000:5000"
+    depends_on:
+      - product
+      - counter
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+  # Web Service
+  web:
+    image: shinshushi/go-coffeeshop-web
+    container_name: coffeeshop-web
+    environment:
+      REVERSE_PROXY_URL: "http://proxy:5000"
+      WEB_PORT: "8888"
+    ports:
+      - "8888:8888"
+    depends_on:
+      - proxy
+    restart: unless-stopped
+    networks:
+      - coffeeshop-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  coffeeshop-network:
+    driver: bridge
