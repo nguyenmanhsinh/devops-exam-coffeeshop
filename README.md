@@ -2,7 +2,7 @@
 
 - **Student**: Sinh Nguyen
 - **Email**: snguyen@opswat.com
-- **Github**: 
+- **Github**: https://github.com/nguyenmanhsinh/devops-exam-coffeeshop
 
 ## Summary
 
